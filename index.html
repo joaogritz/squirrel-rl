@@ -1,0 +1,1342 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Um esquilo com rede neural que aprende sozinho numa floresta 2D, com pensamentos em tempo real, gráficos de aprendizado e um diário de eventos.">
+<title>Floresta da Avelã</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+/* Layout: a field-notebook lab bench. Forest canvas on the left, the squirrel's mind on the right, stacked on phones. */
+:root {
+  --bg: #e9eee6;
+  --surface: #fbfcf9;
+  --surface-2: #f1f4ee;
+  --ink: #1c2a21;
+  --muted: #5a6a5f;
+  --line: #d3dccf;
+  --accent: #a4552a;      /* chestnut fur */
+  --accent-soft: #f2e2d5;
+  --leaf: #3d7a47;
+  --danger: #b83f2d;
+  --sky: #2f6a9a;
+  --violet: #7a4fb0;
+  --teal: #2b8277;
+  --gold: #a7800f;
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1612; --surface: #16201a; --surface-2: #1c2821; --ink: #e4ece5; --muted: #98a89d;
+    --line: #2a3830; --accent: #e28c58; --accent-soft: #3a281d; --leaf: #7cc287; --danger: #f07a66;
+    --sky: #7db2e0; --violet: #b99bea; --teal: #6cc7b9; --gold: #e3c15a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1612; --surface: #16201a; --surface-2: #1c2821; --ink: #e4ece5; --muted: #98a89d;
+  --line: #2a3830; --accent: #e28c58; --accent-soft: #3a281d; --leaf: #7cc287; --danger: #f07a66;
+  --sky: #7db2e0; --violet: #b99bea; --teal: #6cc7b9; --gold: #e3c15a; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 32px;
+}
+.app { max-width: 1320px; margin: 0 auto; display: grid; gap: 16px; }
+header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; }
+h1 { font-family: var(--font-display); font-weight: 800; font-size: clamp(1.6rem, 3vw, 2.2rem); letter-spacing: -0.02em; margin: 0; line-height: 1.05; text-wrap: balance; }
+h1 em { font-style: normal; color: var(--accent); }
+.sub { margin: 4px 0 0; color: var(--muted); max-width: 62ch; }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+button, .seg button { font: inherit; }
+.btn {
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 8px;
+  padding: 7px 12px; cursor: pointer; font-weight: 700; font-size: 0.9rem;
+}
+.btn:hover { border-color: var(--accent); }
+.btn:focus-visible, .seg button:focus-visible, .tab:focus-visible, .toggle input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.btn.warn { color: var(--danger); }
+.btn.warn.armed { background: var(--danger); color: var(--surface); border-color: var(--danger); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.seg button { border: 0; background: transparent; color: var(--muted); padding: 7px 11px; cursor: pointer; font-family: var(--font-mono); font-size: 0.82rem; font-weight: 600; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+.toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 0.88rem; color: var(--muted); cursor: pointer; user-select: none; }
+.toggle input { accent-color: var(--accent); width: 16px; height: 16px; }
+
+.layout { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(320px, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 920px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+.stage { min-width: 0; display: grid; gap: 8px; }
+.stage canvas { width: 100%; max-width: 100%; aspect-ratio: 3 / 2; display: block; border-radius: 12px; cursor: crosshair; box-shadow: 0 1px 0 var(--line), 0 10px 30px -18px rgba(20, 40, 25, .5); background: #6f8b4c; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.8rem; color: var(--muted); align-items: center; }
+.legend i { display: inline-block; width: 18px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
+.legend .hint { margin-left: auto; }
+
+.mind { min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
+.tabs { display: flex; border-bottom: 1px solid var(--line); background: var(--surface-2); }
+.tab { flex: 1; border: 0; background: transparent; padding: 11px 8px; cursor: pointer; color: var(--muted); font-family: var(--font-display); font-weight: 700; font-size: 0.95rem; border-bottom: 2px solid transparent; }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); background: var(--surface); }
+.pane { padding: 14px 16px 16px; display: grid; gap: 12px; min-width: 0; }
+.pane h3 { margin: 0; font-family: var(--font-display); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 700; }
+
+.status { display: grid; gap: 8px; }
+.meter { display: grid; grid-template-columns: 52px 1fr 44px; align-items: center; gap: 8px; font-size: 0.85rem; }
+.meter .lbl { color: var(--muted); }
+.bar { height: 8px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 99px; overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--leaf); border-radius: 99px; transition: width .15s linear; }
+.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 0.8rem; text-align: right; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 0.78rem; padding: 3px 9px; border-radius: 99px; background: var(--surface-2); border: 1px solid var(--line); color: var(--ink); white-space: nowrap; }
+.chip b { font-family: var(--font-mono); font-weight: 600; }
+.chip.explore { background: color-mix(in srgb, var(--sky) 14%, var(--surface)); border-color: color-mix(in srgb, var(--sky) 40%, var(--line)); color: var(--sky); }
+.chip.decide { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); color: var(--accent); }
+.chip.danger { background: color-mix(in srgb, var(--danger) 14%, var(--surface)); border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); color: var(--danger); }
+
+.wants { display: grid; gap: 4px; }
+.want { display: grid; grid-template-columns: 128px 1fr 40px; gap: 8px; align-items: center; font-size: 0.83rem; color: var(--muted); }
+.want .bar { height: 10px; }
+.want .bar i { background: color-mix(in srgb, var(--accent) 45%, var(--surface-2)); transition: width .12s linear; }
+.want.on { color: var(--ink); font-weight: 700; }
+.want.on .bar i { background: var(--accent); }
+
+.feed { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-height: 380px; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
+.feed li { border-left: 3px solid var(--line); padding: 4px 0 4px 10px; animation: pop .25s ease-out; }
+.feed li:first-child p { font-weight: 700; }
+.feed .meta { display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 0.72rem; color: var(--muted); font-family: var(--font-mono); align-items: center; }
+.feed .tag { text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+.feed p { margin: 2px 0 0; font-size: 0.93rem; overflow-wrap: anywhere; }
+.t-pensa { border-left-color: var(--accent) !important; } .t-pensa .tag { color: var(--accent); }
+.t-explora { border-left-color: var(--sky) !important; } .t-explora .tag { color: var(--sky); }
+.t-comida { border-left-color: var(--leaf) !important; } .t-comida .tag { color: var(--leaf); }
+.t-guardar { border-left-color: var(--violet) !important; } .t-guardar .tag { color: var(--violet); }
+.t-perigo, .t-morte { border-left-color: var(--danger) !important; } .t-perigo .tag, .t-morte .tag { color: var(--danger); }
+.t-salvo { border-left-color: var(--leaf) !important; } .t-salvo .tag { color: var(--leaf); }
+.t-estacao, .t-recorde { border-left-color: var(--muted) !important; } .t-recorde .tag { color: var(--accent); }
+@keyframes pop { from { opacity: .3; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .feed li { animation: none; } .bar i, .want .bar i { transition: none; } }
+.note { margin: 0; font-size: 0.8rem; color: var(--muted); }
+.pane canvas { width: 100%; max-width: 100%; display: block; }
+#radar { aspect-ratio: 16 / 9; }
+#neurons { aspect-ratio: 4 / 3; }
+#chart { aspect-ratio: 16 / 9; }
+.stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.stat { background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; min-width: 0; }
+.stat span { display: block; font-size: 0.74rem; color: var(--muted); }
+.stat b { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 1.05rem; font-weight: 600; }
+.keyrow { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 0.78rem; color: var(--muted); }
+.keyrow i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+
+/* statistics board */
+.board { display: grid; gap: 14px; margin-top: 10px; }
+.board-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 10px 20px; }
+.board h2 { font-family: var(--font-display); font-weight: 800; font-size: 1.45rem; letter-spacing: -0.01em; margin: 0; }
+.copied { font-size: 0.82rem; color: var(--leaf); min-height: 1.2em; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-width: 0; display: grid; gap: 2px; }
+.tile span { font-size: 0.75rem; color: var(--muted); }
+.tile b { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 1.3rem; font-weight: 600; line-height: 1.2; overflow-wrap: anywhere; }
+.tile small { font-size: 0.75rem; color: var(--muted); font-family: var(--font-mono); }
+.tile small.up { color: var(--leaf); } .tile small.down { color: var(--danger); }
+.charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin: 0; display: grid; gap: 8px; min-width: 0; align-content: start; }
+.card.wide { grid-column: 1 / -1; }
+@media (max-width: 760px) { .charts { grid-template-columns: minmax(0, 1fr); } }
+.card h3 { margin: 0; font-family: var(--font-display); font-size: 1rem; font-weight: 700; }
+.plot { position: relative; min-width: 0; }
+.plot canvas { width: 100%; max-width: 100%; aspect-ratio: 16 / 8; display: block; cursor: crosshair; }
+.card.wide .plot canvas { aspect-ratio: 16 / 5; }
+@media (max-width: 760px) { .card.wide .plot canvas { aspect-ratio: 16 / 9; } }
+.tip { position: absolute; pointer-events: none; transform: translate(-50%, calc(-100% - 12px)); background: var(--ink); color: var(--bg); font-size: 0.78rem; line-height: 1.4; padding: 6px 9px; border-radius: 7px; white-space: nowrap; z-index: 2; }
+.filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.filters button { font: inherit; font-size: 0.8rem; padding: 4px 10px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); cursor: pointer; }
+.filters button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); font-weight: 700; }
+.filters button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.logwrap { max-height: 420px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; overscroll-behavior: contain; }
+.logwrap table { width: 100%; border-collapse: collapse; font-size: 0.85rem; min-width: 560px; }
+.logwrap th { position: sticky; top: 0; background: var(--surface-2); text-align: left; font-weight: 700; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.logwrap td { padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.logwrap td.num { font-family: var(--font-mono); font-size: 0.78rem; color: var(--muted); white-space: nowrap; text-align: left; }
+.logwrap td .tag { font-family: var(--font-mono); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; white-space: nowrap; }
+.logwrap td.empty { color: var(--muted); text-align: center; padding: 18px; }
+#copyBox { width: 100%; min-height: 120px; font-family: var(--font-mono); font-size: 0.75rem; background: var(--surface-2); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+</style>
+
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <h1>Floresta da <em>Avelã</em></h1>
+      <p class="sub">Avelã é um esquilo com um cérebro de rede neural que começa sem saber nada. Ele aprende por tentativa e erro a pegar nozes, enterrar comida para o inverno e fugir da raposa subindo nas árvores.</p>
+    </div>
+    <div class="controls">
+      <button class="btn primary" id="play" type="button">Pausar</button>
+      <div class="seg" role="group" aria-label="Velocidade">
+        <button type="button" data-speed="1" aria-pressed="true">1×</button>
+        <button type="button" data-speed="3" aria-pressed="false">3×</button>
+        <button type="button" data-speed="10" aria-pressed="false">10×</button>
+        <button type="button" data-speed="0" aria-pressed="false">Turbo</button>
+      </div>
+      <label class="toggle"><input type="checkbox" id="vision" checked><span>Mostrar visão</span></label>
+      <button class="btn warn" id="reset" type="button">Cérebro novo</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="stage">
+      <canvas id="world" aria-label="Floresta simulada com o esquilo Avelã, nozes, árvores e uma raposa"></canvas>
+      <div class="legend" aria-label="Cores dos raios de visão">
+        <span><i style="background:#8fe07c"></i>árvore</span>
+        <span><i style="background:#ffd166"></i>noz</span>
+        <span><i style="background:#c99bff"></i>esconderijo</span>
+        <span><i style="background:#ff5f57"></i>raposa</span>
+        <span><i style="background:#dfe7ea"></i>borda</span>
+        <span class="hint">Clique na floresta para jogar uma noz.</span>
+      </div>
+    </section>
+
+    <aside class="mind">
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" type="button" id="tab-pensa" aria-selected="true" aria-controls="pane-pensa">Pensamentos</button>
+        <button class="tab" role="tab" type="button" id="tab-cerebro" aria-selected="false" aria-controls="pane-cerebro">Cérebro</button>
+        <button class="tab" role="tab" type="button" id="tab-prog" aria-selected="false" aria-controls="pane-prog">Progresso</button>
+      </div>
+
+      <div class="pane" id="pane-pensa" role="tabpanel" aria-labelledby="tab-pensa">
+        <div class="status">
+          <div class="meter"><span class="lbl">Fome</span><div class="bar"><i id="hungerBar"></i></div><span class="num" id="hungerTxt">0%</span></div>
+          <div class="chips">
+            <span class="chip" id="chipState">decidindo</span>
+            <span class="chip">Na boca <b id="carryTxt">0/3</b></span>
+            <span class="chip">Esconderijos <b id="cacheTxt">0</b></span>
+            <span class="chip" id="chipSeason">Outono</span>
+          </div>
+        </div>
+        <h3>Vontade agora</h3>
+        <div class="wants" id="wants"></div>
+        <h3>Pensamentos</h3>
+        <ol class="feed" id="feed" aria-live="off"></ol>
+        <p class="note">As frases são traduções dos números do cérebro: o que os sensores veem, quanta fome ele sente e qual ação a rede neural prefere. Em 10× e Turbo só aparecem os acontecimentos mais importantes.</p>
+      </div>
+
+      <div class="pane" id="pane-cerebro" role="tabpanel" aria-labelledby="tab-cerebro" hidden>
+        <h3>O que os olhos captam</h3>
+        <canvas id="radar"></canvas>
+        <p class="note">São 9 raios de visão à frente do esquilo. Cada raio mede a distância até árvores, nozes, esconderijos, a raposa e a borda, o que dá 45 números. Além disso ele tem faro (direção da noz mais próxima), noção de onde fica a árvore mais perto, audição (de onde vem a raposa), memória dos esconderijos e a própria fome.</p>
+        <h3>Neurônios acendendo</h3>
+        <canvas id="neurons"></canvas>
+        <div class="keyrow"><span><i style="background:var(--sky)"></i>entradas (62)</span><span><i style="background:var(--accent)"></i>camadas ocultas (48 + 48)</span><span><i style="background:var(--leaf)"></i>ações (6)</span></div>
+        <p class="note">A rede dá uma nota para cada ação. No começo ela escolhe muito ao acaso (curiosidade). Com o tempo passa a confiar nas notas que aprendeu, recebendo pontos por comer e perdendo quando morre.</p>
+      </div>
+
+      <div class="pane" id="pane-prog" role="tabpanel" aria-labelledby="tab-prog" hidden>
+        <h3>Quanto tempo cada vida durou</h3>
+        <canvas id="chart"></canvas>
+        <div class="keyrow"><span><i style="background:var(--accent)"></i>morreu de fome</span><span><i style="background:var(--danger)"></i>pego pela raposa</span><span><i style="background:var(--ink)"></i>média das últimas 10</span></div>
+        <div class="stats">
+          <div class="stat"><span>Vida atual</span><b id="sLife">1</b></div>
+          <div class="stat"><span>Recorde</span><b id="sRecord">0s</b></div>
+          <div class="stat"><span>Média (últimas 20)</span><b id="sAvg">0s</b></div>
+          <div class="stat"><span>Curiosidade</span><b id="sEps">100%</b></div>
+          <div class="stat"><span>Nozes comidas</span><b id="sAte">0</b></div>
+          <div class="stat"><span>Nozes enterradas</span><b id="sBuried">0</b></div>
+          <div class="stat"><span>Decisões tomadas</span><b id="sDec">0</b></div>
+          <div class="stat"><span>Lições de treino</span><b id="sTrain">0</b></div>
+        </div>
+        <p class="note">O cérebro fica salvo neste navegador, então você pode fechar e voltar depois. Use o Turbo para ver o aprendizado acontecer mais rápido: as vidas tendem a ficar mais longas. Mais gráficos e o diário completo ficam abaixo da floresta.</p>
+      </div>
+    </aside>
+  </main>
+
+  <section class="board" aria-labelledby="boardTitle">
+    <div class="board-head">
+      <div>
+        <h2 id="boardTitle">Estatísticas e diário</h2>
+        <p class="sub">Tudo o que aconteceu desde que este cérebro nasceu. Atualiza sozinho a cada segundo. Passe o mouse nos gráficos para ver os detalhes.</p>
+      </div>
+      <div class="controls">
+        <button class="btn" id="copyLives" type="button">Copiar vidas (CSV)</button>
+        <button class="btn" id="copyLog" type="button">Copiar diário (CSV)</button>
+        <span class="copied" id="copyMsg" role="status"></span>
+      </div>
+    </div>
+    <textarea id="copyBox" readonly hidden aria-label="Dados para copiar"></textarea>
+
+    <div class="tiles">
+      <div class="tile"><span>Vidas vividas</span><b id="tLives">0</b><small id="tLivesSub">a primeira ainda está rolando</small></div>
+      <div class="tile"><span>Recorde de vida</span><b id="tRecord">0s</b><small id="tRecordSub">&nbsp;</small></div>
+      <div class="tile"><span>Média das últimas 20</span><b id="tAvg">0s</b><small id="tAvgTrend">&nbsp;</small></div>
+      <div class="tile"><span>Nozes comidas por vida</span><b id="tFood">0</b><small>últimas 20 vidas</small></div>
+      <div class="tile"><span>Fugas da raposa</span><b id="tEscape">0%</b><small id="tEscapeSub">últimas 50 vidas</small></div>
+      <div class="tile"><span>Principal causa de morte</span><b id="tCause">nenhuma</b><small id="tCauseSub">últimas 50 vidas</small></div>
+    </div>
+
+    <div class="charts">
+      <figure class="card wide" data-chart="vidas">
+        <h3>Duração de cada vida</h3>
+        <div class="keyrow"><span><i style="background:var(--accent)"></i>morreu de fome</span><span><i style="background:var(--danger)"></i>pego pela raposa</span><span><i style="background:var(--ink)"></i>média das últimas 10</span></div>
+        <div class="plot"><canvas></canvas><div class="tip" hidden></div></div>
+        <p class="note">Se a linha preta sobe, ele está aprendendo a sobreviver.</p>
+      </figure>
+      <figure class="card" data-chart="mortes">
+        <h3>Do que ele morre</h3>
+        <div class="keyrow"><span><i style="background:var(--danger)"></i>raposa</span><span><i style="background:var(--accent)"></i>fome</span></div>
+        <div class="plot"><canvas></canvas><div class="tip" hidden></div></div>
+        <p class="note">Cada barra junta um grupo de vidas seguidas.</p>
+      </figure>
+      <figure class="card" data-chart="comida">
+        <h3>Nozes por vida</h3>
+        <div class="keyrow"><span><i style="background:var(--sky)"></i>pegou</span><span><i style="background:var(--leaf)"></i>comeu</span><span><i style="background:var(--violet)"></i>enterrou</span></div>
+        <div class="plot"><canvas></canvas><div class="tip" hidden></div></div>
+        <p class="note">Média móvel de 10 vidas.</p>
+      </figure>
+      <figure class="card" data-chart="pontos">
+        <h3>Pontuação por vida</h3>
+        <div class="keyrow"><span><i style="background:var(--accent)"></i>soma das recompensas (média de 10 vidas)</span></div>
+        <div class="plot"><canvas></canvas><div class="tip" hidden></div></div>
+        <p class="note">São os pontos que o cérebro recebe: comer dá pontos, morrer tira. É o que ele tenta aumentar.</p>
+      </figure>
+      <figure class="card" data-chart="fugas">
+        <h3>Taxa de fuga da raposa</h3>
+        <div class="keyrow"><span><i style="background:var(--leaf)"></i>% das perseguições em que escapou</span></div>
+        <div class="plot"><canvas></canvas><div class="tip" hidden></div></div>
+        <p class="note">Ele escapa subindo numa árvore ou correndo até a raposa cansar.</p>
+      </figure>
+      <figure class="card" data-chart="treino">
+        <h3>Curiosidade e erro do cérebro</h3>
+        <div class="keyrow"><span><i style="background:var(--sky)"></i>curiosidade (ações ao acaso)</span><span><i style="background:var(--ink)"></i>erro das previsões (relativo)</span></div>
+        <div class="plot"><canvas></canvas><div class="tip" hidden></div></div>
+        <p class="note">A curiosidade cai com o tempo. O erro mostra o quanto o cérebro ainda se surpreende com o que acontece.</p>
+      </figure>
+      <figure class="card" data-chart="acoes">
+        <h3>O que ele faz: antes e agora</h3>
+        <div class="keyrow" id="actLegend"></div>
+        <div class="plot"><canvas></canvas><div class="tip" hidden></div></div>
+        <p class="note">Divisão das ações nas 20 primeiras vidas registradas e nas 20 mais recentes.</p>
+      </figure>
+    </div>
+
+    <div class="card">
+      <div class="board-head">
+        <h3>Diário de eventos</h3>
+        <span class="note" id="logCount">0 eventos</span>
+      </div>
+      <div class="filters" id="logFilters">
+        <button type="button" data-filter="todos" aria-pressed="true">Todos</button>
+        <button type="button" data-filter="comida" aria-pressed="false">Comida</button>
+        <button type="button" data-filter="guardar" aria-pressed="false">Guardando</button>
+        <button type="button" data-filter="perigo" aria-pressed="false">Perigo</button>
+        <button type="button" data-filter="salvo" aria-pressed="false">A salvo</button>
+        <button type="button" data-filter="morte" aria-pressed="false">Fim da vida</button>
+        <button type="button" data-filter="recorde" aria-pressed="false">Recordes</button>
+        <button type="button" data-filter="estacao" aria-pressed="false">Estações</button>
+      </div>
+      <div class="logwrap">
+        <table>
+          <thead><tr><th>Decisão</th><th>Vida</th><th>Tempo</th><th>Tipo</th><th>O que aconteceu</th></tr></thead>
+          <tbody id="logBody"></tbody>
+        </table>
+      </div>
+      <p class="note">O diário guarda os 1.500 eventos mais recentes, sem o filtro de velocidade da aba Pensamentos. Isso inclui o que acontece no Turbo.</p>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+'use strict';
+// ---------- constants ----------
+const W = 900, H = 600, TAU = Math.PI * 2;
+const RAYS = 9, FOV = Math.PI * 1.15, RAYLEN = 180;
+const TYPES = ['árvore', 'noz', 'esconderijo', 'raposa', 'borda'];
+const RAYCOL = ['#8fe07c', '#ffd166', '#c99bff', '#ff5f57', '#dfe7ea'];
+const NIN = RAYS * 5 + 5 + 12, NOUT = 6, HID = [48, 48];
+const ACTIONS = ['Andar em frente', 'Virar à esquerda', 'Virar à direita', 'Enterrar noz', 'Comer noz', 'Parar e observar'];
+const AUTUMN = 2400, WINTER = 1200, HUNGER_RATE = 1 / 1600;
+const SPD = 2.0, TURN = 0.11, FOX_CHASE = 1.45, FOX_WALK = 0.9, FOX_SIGHT = 150, FOX_STAMINA = 170;
+const GAMMA = 0.98, LR = 5e-4, BATCH = 32, REPLAY = 30000, EPS_DECAY = 40000, EPS_MIN = 0.04, SYNC = 800;
+const KEY = 'avela-cerebro-v2';
+
+// ---------- neural network (tiny MLP + Adam) ----------
+function gauss() { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v); }
+function makeNet() {
+  const sizes = [NIN, ...HID, NOUT], layers = [];
+  for (let l = 0; l < sizes.length - 1; l++) {
+    const ni = sizes[l], no = sizes[l + 1], n = ni * no;
+    const Wt = new Float32Array(n), sc = Math.sqrt(2 / ni) * (l === sizes.length - 2 ? 0.3 : 1);
+    for (let i = 0; i < n; i++) Wt[i] = gauss() * sc;
+    layers.push({ ni, no, W: Wt, b: new Float32Array(no), gW: new Float32Array(n), gb: new Float32Array(no),
+      mW: new Float32Array(n), vW: new Float32Array(n), mb: new Float32Array(no), vb: new Float32Array(no) });
+  }
+  return { layers, t: 0 };
+}
+function copyNet(src, dst) { src.layers.forEach((L, i) => { dst.layers[i].W.set(L.W); dst.layers[i].b.set(L.b); }); }
+function makeActs(net) { return net.layers.map(L => new Float32Array(L.no)); }
+function forward(net, x, acts) {
+  let a = x; const last = net.layers.length - 1;
+  for (let l = 0; l <= last; l++) {
+    const L = net.layers[l], out = acts[l], ni = L.ni, Wt = L.W;
+    for (let j = 0; j < L.no; j++) {
+      let s = L.b[j]; const o = j * ni;
+      for (let i = 0; i < ni; i++) s += Wt[o + i] * a[i];
+      out[j] = (l < last && s < 0) ? 0 : s;
+    }
+    a = out;
+  }
+  return a;
+}
+function adam(net, n) {
+  net.t++;
+  const b1 = 0.9, b2 = 0.999, c1 = 1 - Math.pow(b1, net.t), c2 = 1 - Math.pow(b2, net.t), inv = 1 / n;
+  const upd = (P, G, M, V) => {
+    for (let i = 0; i < P.length; i++) {
+      const g = G[i] * inv;
+      M[i] = b1 * M[i] + (1 - b1) * g; V[i] = b2 * V[i] + (1 - b2) * g * g;
+      P[i] -= LR * (M[i] / c1) / (Math.sqrt(V[i] / c2) + 1e-8);
+    }
+  };
+  for (const L of net.layers) { upd(L.W, L.gW, L.mW, L.vW); upd(L.b, L.gb, L.mb, L.vb); }
+}
+
+let online, target, actsLive, actsA, actsB, actsT, deltas;
+function initBrain(saved) {
+  online = makeNet();
+  if (saved) saved.layers.forEach((L, i) => { online.layers[i].W.set(L.W); online.layers[i].b.set(L.b); });
+  target = makeNet(); copyNet(online, target);
+  actsLive = makeActs(online); actsA = makeActs(online); actsB = makeActs(online); actsT = makeActs(online);
+  deltas = online.layers.map(L => new Float32Array(L.no));
+}
+
+// ---------- replay memory ----------
+const RB = { s: new Float32Array(REPLAY * NIN), s2: new Float32Array(REPLAY * NIN), a: new Uint8Array(REPLAY), r: new Float32Array(REPLAY), d: new Uint8Array(REPLAY), n: 0, i: 0 };
+function remember(s, a, r, s2, d) {
+  const i = RB.i; RB.s.set(s, i * NIN); RB.s2.set(s2, i * NIN); RB.a[i] = a; RB.r[i] = r; RB.d[i] = d ? 1 : 0;
+  RB.i = (i + 1) % REPLAY; RB.n = Math.min(RB.n + 1, REPLAY);
+}
+let decisions = 0, trainSteps = 0, lossAvg = 0;
+function trainBatch() {
+  const Ls = online.layers, nl = Ls.length;
+  for (const L of Ls) { L.gW.fill(0); L.gb.fill(0); }
+  let loss = 0;
+  for (let b = 0; b < BATCH; b++) {
+    const k = (Math.random() * RB.n) | 0;
+    const s = RB.s.subarray(k * NIN, (k + 1) * NIN), s2 = RB.s2.subarray(k * NIN, (k + 1) * NIN);
+    let y = RB.r[k];
+    if (!RB.d[k]) {
+      const qn = forward(online, s2, actsB); let am = 0;
+      for (let j = 1; j < NOUT; j++) if (qn[j] > qn[am]) am = j;
+      y += GAMMA * forward(target, s2, actsT)[am];
+    }
+    const q = forward(online, s, actsA), a = RB.a[k], err = q[a] - y;
+    loss += err * err;
+    const dl = deltas[nl - 1]; dl.fill(0); dl[a] = err > 1 ? 1 : err < -1 ? -1 : err;
+    for (let l = nl - 1; l >= 0; l--) {
+      const L = Ls[l], inp = l === 0 ? s : actsA[l - 1], d = deltas[l], ni = L.ni, no = L.no;
+      for (let j = 0; j < no; j++) {
+        const dj = d[j]; if (dj === 0) continue;
+        L.gb[j] += dj; const o = j * ni;
+        for (let i = 0; i < ni; i++) L.gW[o + i] += dj * inp[i];
+      }
+      if (l > 0) {
+        const pd = deltas[l - 1];
+        for (let i = 0; i < ni; i++) {
+          if (inp[i] <= 0) { pd[i] = 0; continue; }
+          let sum = 0; for (let j = 0; j < no; j++) sum += L.W[j * ni + i] * d[j];
+          pd[i] = sum;
+        }
+      }
+    }
+  }
+  adam(online, BATCH);
+  trainSteps++;
+  if (trainSteps % SYNC === 0) copyNet(online, target);
+  lossAvg = lossAvg * 0.99 + (loss / BATCH) * 0.01;
+}
+const epsilon = () => Math.max(EPS_MIN, 1 - (decisions / EPS_DECAY) * (1 - EPS_MIN));
+
+// ---------- world ----------
+let trees = [], nuts = [], caches = [], fox, sq;
+let season = 'outono', seasonT = 0, tick = 0, lifeT = 0, life = 1, record = 0;
+let history = [], totals = { ate: 0, buried: 0 };
+const rnd = (a, b) => a + Math.random() * (b - a);
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+
+function genTrees() {
+  const t = []; let tries = 0;
+  while (t.length < 12 && tries++ < 3000) {
+    const x = rnd(70, W - 70), y = rnd(70, H - 70);
+    if (t.every(o => Math.hypot(o.x - x, o.y - y) > 125)) t.push({ x, y, r: rnd(30, 40), seed: Math.random() });
+  }
+  return t;
+}
+function spawnNut(x, y) {
+  if (x === undefined) {
+    const t = trees[(Math.random() * trees.length) | 0], a = rnd(0, TAU), d = t.r + rnd(14, 55);
+    x = clamp(t.x + Math.cos(a) * d, 12, W - 12); y = clamp(t.y + Math.sin(a) * d, 12, H - 12);
+  }
+  nuts.push({ x, y, rot: rnd(-0.6, 0.6) });
+}
+function newSquirrel() {
+  let x, y, tries = 0;
+  do { x = rnd(60, W - 60); y = rnd(60, H - 60); } while (fox && Math.hypot(fox.x - x, fox.y - y) < 320 && tries++ < 50);
+  return { x, y, a: rnd(0, TAU), hunger: 0.3, carry: 0, inTree: false, ate: 0,
+    picked: 0, buried: 0, dug: 0, chases: 0, escapes: 0, reward: 0, explores: 0, steps: 0, hungerSum: 0, treeTicks: 0, acts: [0, 0, 0, 0, 0, 0] };
+}
+function farPoint(minD) {
+  let x, y, tries = 0;
+  do { x = rnd(40, W - 40); y = rnd(40, H - 40); } while (sq && Math.hypot(sq.x - x, sq.y - y) < minD && tries++ < 60);
+  return { x, y };
+}
+function resetFox() {
+  const p = farPoint(380);
+  fox = { x: p.x, y: p.y, a: rnd(0, TAU), mode: 'wander', t: 0, cool: 240, tx: 0, ty: 0 };
+  newFoxTarget(0);
+}
+function newFoxTarget(minD) { const p = farPoint(minD); fox.tx = p.x; fox.ty = p.y; }
+function steer(o, tx, ty, sp, maxTurn) {
+  const want = Math.atan2(ty - o.y, tx - o.x);
+  let da = want - o.a; da = Math.atan2(Math.sin(da), Math.cos(da));
+  o.a += clamp(da, -maxTurn, maxTurn);
+  o.x = clamp(o.x + Math.cos(o.a) * sp, 14, W - 14); o.y = clamp(o.y + Math.sin(o.a) * sp, 14, H - 14);
+}
+
+// particles (floating words over the map)
+const particles = [];
+function pop(text, color) { particles.push({ x: sq.x, y: sq.y - 18, text, color, life: 1 }); if (particles.length > 30) particles.shift(); }
+
+function envTick(act, first) {
+  let r = -0.001;
+  tick++; lifeT++; seasonT++;
+  if (season === 'outono' && seasonT >= AUTUMN) { season = 'inverno'; seasonT = 0; nuts.length = 0; think('Começou o inverno. A neve cobriu todas as nozes do chão.', 'estacao', 2); }
+  else if (season === 'inverno' && seasonT >= WINTER) { season = 'outono'; seasonT = 0; think('O outono voltou. Tem nozes caindo das árvores de novo!', 'estacao', 2); }
+  if (season === 'outono' && nuts.length < 16 && Math.random() < 0.025) spawnNut();
+
+  // actions
+  let sp = 0;
+  if (act === 0) sp = SPD;
+  else if (act === 1) { sq.a -= TURN; sp = SPD * 0.85; }
+  else if (act === 2) { sq.a += TURN; sp = SPD * 0.85; }
+  else if (act === 3 && first) {
+    if (sq.carry > 0 && !sq.inTree) {
+      sq.carry--; totals.buried++; sq.buried++;
+      const near = caches.find(c => Math.hypot(c.x - sq.x, c.y - sq.y) < 16);
+      if (near) { near.n++; near.born = tick; } else caches.push({ x: sq.x, y: sq.y, n: 1, born: tick });
+      r += (sq.hunger < 0.45 && caches.length <= 15) ? 0.06 : -0.01;
+      pop('enterrei', '#c99bff');
+      think('Enterrei uma noz aqui. Tenho que lembrar desse lugar!', 'guardar', 1);
+    } else r -= 0.02;
+  } else if (act === 4 && first) {
+    if (sq.carry > 0) {
+      const before = sq.hunger; sq.carry--; sq.hunger = Math.max(0, sq.hunger - 0.4); sq.ate++; totals.ate++;
+      r += before > 0.2 ? 0.3 + 0.7 * before : -0.05;
+      pop('nhac!', '#ffd166');
+      think(before > 0.5 ? 'Nhac! Que alívio, tava morrendo de fome.' : 'Nhac! Noz gostosa.', 'comida', 1);
+    } else r -= 0.02;
+  }
+  if (sp) {
+    const nx = sq.x + Math.cos(sq.a) * sp, ny = sq.y + Math.sin(sq.a) * sp;
+    sq.x = clamp(nx, 10, W - 10); sq.y = clamp(ny, 10, H - 10);
+    if (sq.x !== nx || sq.y !== ny) r -= 0.01;
+  }
+  sq.a = Math.atan2(Math.sin(sq.a), Math.cos(sq.a));
+
+  // tree safety
+  const wasIn = sq.inTree;
+  sq.inTree = trees.some(t => Math.hypot(t.x - sq.x, t.y - sq.y) < t.r * 0.62);
+  if (sq.inTree && !wasIn && fox.mode === 'chase') { r += 0.1; }
+
+  // pick up nuts
+  for (let i = nuts.length - 1; i >= 0 && sq.carry < 3; i--) {
+    const n = nuts[i];
+    if (Math.hypot(n.x - sq.x, n.y - sq.y) < 12) {
+      nuts.splice(i, 1); sq.carry++; sq.picked++; r += 0.15; pop('+noz', '#ffd166');
+      think(sq.carry === 3 ? 'Peguei mais uma. Boca cheia, três nozes!' : 'Peguei uma noz!', 'comida', 1);
+    }
+  }
+  // dig caches
+  for (let i = caches.length - 1; i >= 0 && sq.carry < 3; i--) {
+    const c = caches[i];
+    if (tick - c.born > 200 && Math.hypot(c.x - sq.x, c.y - sq.y) < 12) {
+      const take = Math.min(c.n, 3 - sq.carry); c.n -= take; sq.carry += take; sq.dug += take;
+      r += season === 'inverno' ? 0.2 : 0.05;
+      if (c.n <= 0) caches.splice(i, 1);
+      pop('achei!', '#c99bff');
+      think(`Achei meu esconderijo! Desenterrei ${take} ${take > 1 ? 'nozes' : 'noz'}.`, 'guardar', 1);
+    }
+  }
+
+  // fox
+  const f = fox, d = Math.hypot(sq.x - f.x, sq.y - f.y);
+  if (f.mode === 'rest') {
+    if (--f.t <= 0) { f.mode = 'wander'; newFoxTarget(0); }
+  } else if (f.mode === 'wander') {
+    f.cool--;
+    if (d < FOX_SIGHT && !sq.inTree && f.cool <= 0) { f.mode = 'chase'; f.t = 0; sq.chases++; think('A raposa me viu!!', 'perigo', 1); pop('!!', '#ff5f57'); }
+    else { steer(f, f.tx, f.ty, FOX_WALK, 0.06); if (Math.hypot(f.tx - f.x, f.ty - f.y) < 20) newFoxTarget(0); }
+  } else if (f.mode === 'chase') {
+    f.t++;
+    if (sq.inTree) { f.mode = 'wander'; f.cool = 160; sq.escapes++; newFoxTarget(280); think('Subi na árvore a tempo! A raposa desistiu.', 'salvo', 1); }
+    else if (f.t > FOX_STAMINA) { f.mode = 'rest'; f.t = 160; f.cool = 0; sq.escapes++; think('A raposa cansou de correr. Ufa!', 'salvo', 1); }
+    else {
+      steer(f, sq.x, sq.y, FOX_CHASE, 0.09);
+      if (Math.hypot(sq.x - f.x, sq.y - f.y) < 15) return { r: -1, done: true, cause: 'raposa' };
+    }
+  }
+
+  // hunger
+  sq.hunger += HUNGER_RATE;
+  if (sq.hunger > 0.75) r -= 0.002;
+  if (sq.hunger >= 1) return { r: -1, done: true, cause: 'fome' };
+  return { r, done: false };
+}
+
+// ---------- senses ----------
+const rayVis = Array.from({ length: RAYS }, () => ({ t: RAYLEN, type: 4 }));
+const percept = TYPES.map(() => ({ c: 0, idx: 4 }));
+function rayCircle(ox, oy, dx, dy, cx, cy, r) {
+  const lx = cx - ox, ly = cy - oy, t = lx * dx + ly * dy;
+  if (t < -r) return Infinity;
+  const d2 = lx * lx + ly * ly - t * t;
+  if (d2 > r * r) return Infinity;
+  const hit = t - Math.sqrt(r * r - d2);
+  return hit < 0 ? 0 : hit;
+}
+function observe(out) {
+  for (const p of percept) { p.c = 0; p.idx = 4; }
+  for (let k = 0; k < RAYS; k++) {
+    const ang = sq.a - FOV / 2 + (FOV * k) / (RAYS - 1), dx = Math.cos(ang), dy = Math.sin(ang);
+    const best = [Infinity, Infinity, Infinity, Infinity, Infinity];
+    for (const t of trees) { const h = rayCircle(sq.x, sq.y, dx, dy, t.x, t.y, t.r * 0.62); if (h < best[0]) best[0] = h; }
+    for (const n of nuts) { const h = rayCircle(sq.x, sq.y, dx, dy, n.x, n.y, 9); if (h < best[1]) best[1] = h; }
+    for (const c of caches) { if (tick - c.born <= 200) continue; const h = rayCircle(sq.x, sq.y, dx, dy, c.x, c.y, 10); if (h < best[2]) best[2] = h; }
+    best[3] = rayCircle(sq.x, sq.y, dx, dy, fox.x, fox.y, 15);
+    const tx = dx > 0 ? (W - sq.x) / dx : dx < 0 ? -sq.x / dx : Infinity;
+    const ty = dy > 0 ? (H - sq.y) / dy : dy < 0 ? -sq.y / dy : Infinity;
+    best[4] = Math.min(tx, ty);
+    let vt = RAYLEN, vtype = -1;
+    for (let j = 0; j < 5; j++) {
+      const c = best[j] < RAYLEN ? 1 - best[j] / RAYLEN : 0;
+      out[k * 5 + j] = c;
+      if (c > percept[j].c) { percept[j].c = c; percept[j].idx = k; }
+      if (best[j] < vt) { vt = best[j]; vtype = j; }
+    }
+    rayVis[k].t = vt; rayVis[k].type = vtype;
+  }
+  const b = RAYS * 5;
+  out[b] = sq.hunger; out[b + 1] = sq.carry / 3; out[b + 2] = season === 'inverno' ? 1 : 0;
+  out[b + 3] = sq.inTree ? 1 : 0; out[b + 4] = fox.mode === 'chase' ? 1 : 0;
+  // all-around senses: smell (nut), sense of place (tree), hearing (fox), memory (stash)
+  sense(out, b + 5, nearest(nuts), 420, 0);
+  sense(out, b + 8, nearest(trees), 420, 1);
+  sense(out, b + 11, fox, 300, 2);
+  sense(out, b + 14, nearest(caches, c => tick - c.born > 200), 500, 3);
+}
+const around = [{ c: 0, rel: 0 }, { c: 0, rel: 0 }, { c: 0, rel: 0 }, { c: 0, rel: 0 }];
+function nearest(list, ok) {
+  let best = null, bd = Infinity;
+  for (const o of list) { if (ok && !ok(o)) continue; const d = (o.x - sq.x) ** 2 + (o.y - sq.y) ** 2; if (d < bd) { bd = d; best = o; } }
+  return best;
+}
+function sense(out, i, o, range, slot) {
+  const s = around[slot];
+  if (!o) { out[i] = out[i + 1] = out[i + 2] = 0; s.c = 0; return; }
+  const d = Math.hypot(o.x - sq.x, o.y - sq.y), c = Math.max(0, 1 - d / range);
+  let rel = Math.atan2(o.y - sq.y, o.x - sq.x) - sq.a; rel = Math.atan2(Math.sin(rel), Math.cos(rel));
+  out[i] = c > 0 ? Math.sin(rel) : 0; out[i + 1] = c > 0 ? Math.cos(rel) : 0; out[i + 2] = c;
+  s.c = c; s.rel = rel;
+}
+const relSide = rel => Math.abs(rel) < 0.35 ? 'bem na frente' : Math.abs(rel) > 2.4 ? 'atrás de mim' : rel < 0 ? 'à esquerda' : 'à direita';
+
+// ---------- thoughts ----------
+const feed = []; let feedDirty = true, lastEventAt = 0, lastBigAt = 0, lastReasonAt = 0;
+let speed = 1, running = true;
+function think(text, tag = 'pensa', prio = 0, extra) {
+  if (prio >= 1) logEvent(tag, text);
+  const now = performance.now();
+  if (prio === 1) { const gap = speed === 0 ? 1600 : speed >= 10 ? 700 : 200; if (now - lastEventAt < gap) return; lastEventAt = now; }
+  if (prio === 2) { const gap = speed === 0 ? 600 : 150; if (now - lastBigAt < gap) return; lastBigAt = now; }
+  feed.unshift({ text, tag, life, sec: Math.round(lifeT / 60), conf: extra && extra.conf, explore: extra && extra.explore });
+  if (feed.length > 70) feed.length = 70;
+  feedDirty = true;
+}
+const pick = arr => arr[(Math.random() * arr.length) | 0];
+function side(idx) { const off = -FOV / 2 + (FOV * idx) / (RAYS - 1); return off < -0.3 ? 'à esquerda' : off > 0.3 ? 'à direita' : 'bem na frente'; }
+const EXPLORE = [
+  'Vou tentar uma coisa diferente só pra ver no que dá.',
+  'E se eu for pra esse lado? Vamos descobrir.',
+  'A curiosidade falou mais alto agora.',
+  'Não sei se isso é uma boa ideia, mas vou testar.'
+];
+function reasonText(a, explore) {
+  const P = percept, hungry = sq.hunger > 0.5, fc = fox.mode === 'chase';
+  if (explore) return pick(EXPLORE);
+  if (fc && !sq.inTree) return around[1].c > 0 ? `A raposa tá atrás de mim! Tem uma árvore ${relSide(around[1].rel)}. Corre!` : 'A raposa tá atrás de mim! Preciso achar uma árvore!';
+  if (sq.inTree && Math.hypot(fox.x - sq.x, fox.y - sq.y) < 220) return 'Aqui em cima a raposa não me alcança. Vou esperar um pouco.';
+  if (a === 4) return sq.carry > 0 ? (hungry ? `Tô com ${Math.round(sq.hunger * 100)}% de fome. Vou comer uma noz que tô carregando.` : 'Vou beliscar uma noz, mesmo sem muita fome.') : 'Quero comer, mas não tenho noz nenhuma na boca...';
+  if (a === 3) return sq.carry > 0 ? (season === 'outono' ? 'Barriga cheia. Vou enterrar essa noz pra quando o inverno chegar.' : 'Vou esconder essa noz aqui pra depois.') : 'Vou cavar aqui... mas não tenho nada pra enterrar.';
+  if (P[3].c > 0.15) return `Tem uma raposa ${side(P[3].idx)}. Melhor ficar de olho.`;
+  if (season === 'inverno' && P[2].c > 0 && sq.carry < 3) return `Enterrei nozes ${side(P[2].idx)}. Hora de desenterrar!`;
+  if (P[1].c > 0 && sq.carry < 3) return hungry ? `Noz ${side(P[1].idx)}! Tô com fome, vou buscar.` : `Noz ${side(P[1].idx)}. Vou pegar pra guardar.`;
+  if (season === 'inverno' && around[3].c > 0 && sq.carry < 3) return `Lembro que enterrei nozes ${relSide(around[3].rel)}. Vou lá.`;
+  if (around[0].c > 0.2 && sq.carry < 3) return `Sinto cheiro de noz ${relSide(around[0].rel)}.`;
+  if (around[2].c > 0.3) return `Ouvi a raposa ${relSide(around[2].rel)}. Melhor ficar perto de uma árvore.`;
+  if (season === 'inverno' && sq.carry === 0) return 'Inverno e nada no chão... onde foi que eu enterrei minhas nozes?';
+  if (sq.carry === 3) return 'Boca cheia! Comer agora ou enterrar pra depois?';
+  if (P[4].c > 0.75) return 'Opa, aqui acaba a floresta. Melhor virar.';
+  if (a === 5) return 'Vou parar um pouco e observar.';
+  if (a === 1) return 'Vou virar pra esquerda e procurar comida.';
+  if (a === 2) return 'Vou virar pra direita e procurar comida.';
+  return hungry ? 'A fome tá apertando. Preciso achar nozes.' : 'Andando por aí, de olho em nozes.';
+}
+
+// ---------- agent loop ----------
+const obs = new Float32Array(NIN), obs2 = new Float32Array(NIN), qLive = new Float32Array(NOUT), probs = new Float32Array(NOUT);
+let haveObs = false, phase = 0, curAct = 5, curExplore = false, stepR = 0;
+function softmax(q) {
+  let m = -Infinity; for (let j = 0; j < NOUT; j++) m = Math.max(m, q[j]);
+  let s = 0; for (let j = 0; j < NOUT; j++) { probs[j] = Math.exp((q[j] - m) / 0.06); s += probs[j]; }
+  for (let j = 0; j < NOUT; j++) probs[j] /= s;
+}
+function simTick() {
+  if (phase === 0) {
+    if (!haveObs) { observe(obs); haveObs = true; }
+    qLive.set(forward(online, obs, actsLive)); softmax(qLive);
+    curExplore = Math.random() < epsilon();
+    let best = 0; for (let j = 1; j < NOUT; j++) if (qLive[j] > qLive[best]) best = j;
+    curAct = curExplore ? (Math.random() * NOUT) | 0 : best;
+    sq.acts[curAct]++; sq.steps++; if (curExplore) sq.explores++; sq.hungerSum += sq.hunger; if (sq.inTree) sq.treeTicks++;
+    stepR = 0;
+    const now = performance.now();
+    if (speed > 0 && speed <= 3 && now - lastReasonAt > (speed === 1 ? 1700 : 2600)) {
+      lastReasonAt = now;
+      const conf = probs[curAct];
+      let text = reasonText(curAct, curExplore);
+      if (!curExplore && conf < 0.3) text = 'Hmm, não tenho certeza... ' + text.charAt(0).toLowerCase() + text.slice(1);
+      think(text, curExplore ? 'explora' : 'pensa', 0, { conf, explore: curExplore });
+    }
+  }
+  const res = envTick(curAct, phase === 0);
+  stepR += res.r; phase++;
+  if (res.done || phase === 2) {
+    observe(obs2);
+    remember(obs, curAct, stepR, obs2, res.done);
+    sq.reward += stepR;
+    decisions++;
+    if (decisions % 2000 === 0) {
+      const l = history.slice(-20);
+      series.push({ d: decisions, eps: epsilon(), loss: lossAvg, avg: l.length ? l.reduce((s, h) => s + h.len, 0) / l.length / 60 : 0 });
+      if (series.length > 400) series.shift();
+      statsDirty = true;
+    }
+    if (RB.n >= 1000 && decisions % 2 === 0) trainBatch();
+    phase = 0;
+    if (res.done) { endLife(res.cause); haveObs = false; } else { obs.set(obs2); }
+  }
+}
+const fmtTime = t => { const s = Math.round(t / 60); return s >= 60 ? `${Math.floor(s / 60)}min ${s % 60}s` : `${s}s`; };
+let progDirty = true;
+function endLife(cause) {
+  const len = lifeT, st = Math.max(1, sq.steps), r3 = v => Math.round(v * 1000) / 1000;
+  history.push({ n: life, len, cause, ate: sq.ate, picked: sq.picked, buried: sq.buried, dug: sq.dug, chases: sq.chases, escapes: sq.escapes,
+    reward: Math.round(sq.reward * 100) / 100, explore: r3(sq.explores / st), hunger: r3(sq.hungerSum / st), tree: r3(sq.treeTicks / st),
+    acts: sq.acts.slice(), season, dec: decisions });
+  if (history.length > 400) history.shift();
+  statsDirty = true;
+  const isRecord = len > record && life > 1; if (len > record) record = len;
+  think(cause === 'raposa'
+    ? `Fui pego pela raposa. Fim da vida #${life}, que durou ${fmtTime(len)}. Meu cérebro vai aprender com isso.`
+    : `Morri de fome. Fim da vida #${life}, que durou ${fmtTime(len)}. Preciso guardar mais comida.`, 'morte', 2);
+  if (isRecord) { lastBigAt = 0; think(`Novo recorde: ${fmtTime(len)} de vida!`, 'recorde', 2); }
+  life++; lifeT = 0; caches = []; particles.length = 0;
+  sq = newSquirrel(); resetFox(); progDirty = true;
+}
+
+// ---------- persistence ----------
+function save() {
+  try {
+    const data = { v: 1, layers: online.layers.map(L => ({ W: Array.from(L.W, x => Math.round(x * 1e5) / 1e5), b: Array.from(L.b, x => Math.round(x * 1e5) / 1e5) })),
+      decisions, trainSteps, history: history.slice(-300), record, totals, life, series: series.slice(-300), log: logbook.slice(-300) };
+    localStorage.setItem(KEY, JSON.stringify(data));
+  } catch (e) { /* storage unavailable */ }
+}
+function load() {
+  try {
+    const raw = localStorage.getItem(KEY); if (!raw) return null;
+    const d = JSON.parse(raw), sizes = [NIN, ...HID, NOUT];
+    if (d.v !== 1 || !Array.isArray(d.layers) || d.layers.length !== sizes.length - 1) return null;
+    for (let l = 0; l < d.layers.length; l++) if (d.layers[l].W.length !== sizes[l] * sizes[l + 1] || d.layers[l].b.length !== sizes[l + 1]) return null;
+    return d;
+  } catch (e) { return null; }
+}
+
+// ---------- rendering: world ----------
+const cv = document.getElementById('world'), ctx = cv.getContext('2d');
+function sizeWorld() { const dpr = Math.min(2, window.devicePixelRatio || 1); cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); }
+const bg = {};
+function makeBg(winter) {
+  const c = document.createElement('canvas'); c.width = W * 2; c.height = H * 2;
+  const g = c.getContext('2d'); g.scale(2, 2);
+  g.fillStyle = winter ? '#e8eef1' : '#71894b'; g.fillRect(0, 0, W, H);
+  const grad = g.createRadialGradient(W / 2, H / 2, 100, W / 2, H / 2, 620);
+  grad.addColorStop(0, 'rgba(255,255,255,0.06)'); grad.addColorStop(1, winter ? 'rgba(90,120,150,0.18)' : 'rgba(20,40,10,0.28)');
+  g.fillStyle = grad; g.fillRect(0, 0, W, H);
+  const specks = winter ? ['#d6e0e6', '#f7fafb', '#c9d5dd'] : ['#5f7a3d', '#839a55', '#6a843f', '#8fa45e'];
+  for (let i = 0; i < 2600; i++) { g.fillStyle = pick(specks); g.fillRect(Math.random() * W, Math.random() * H, rnd(1, 2.6), rnd(1, 2.6)); }
+  if (!winter) {
+    const leaves = ['#c9842f', '#a8552a', '#d9a441', '#b8692e'];
+    for (let i = 0; i < 260; i++) { g.save(); g.translate(Math.random() * W, Math.random() * H); g.rotate(Math.random() * TAU); g.fillStyle = pick(leaves); g.globalAlpha = rnd(0.5, 0.9); g.beginPath(); g.ellipse(0, 0, rnd(2.5, 4.5), rnd(1.2, 2), 0, 0, TAU); g.fill(); g.restore(); }
+  }
+  // a faint dirt trail
+  g.strokeStyle = winter ? 'rgba(160,180,195,0.35)' : 'rgba(120,95,55,0.35)'; g.lineWidth = 22; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(-20, H * 0.72); g.bezierCurveTo(W * 0.3, H * 0.55, W * 0.55, H * 0.95, W + 20, H * 0.62); g.stroke();
+  return c;
+}
+function ell(x, y, rx, ry, rot = 0) { ctx.beginPath(); ctx.ellipse(x, y, rx, ry, rot, 0, TAU); ctx.fill(); }
+function drawTree(t, winter) {
+  ctx.fillStyle = 'rgba(15,30,15,0.28)'; ell(t.x + 7, t.y + 9, t.r * 1.05, t.r * 0.95);
+  const palettes = winter ? [['#2d4a3a', '#3b5f4a', '#4d7560']] :
+    [['#2f5a34', '#3d7040', '#4f8a4c'], ['#8a5a22', '#b0742a', '#d19a3c'], ['#6e6a26', '#8f8a33', '#b0a947']];
+  const p = palettes[Math.floor(t.seed * palettes.length) % palettes.length];
+  const lobes = 7;
+  ctx.fillStyle = p[0];
+  for (let i = 0; i < lobes; i++) { const a = (i / lobes) * TAU + t.seed * 6; ell(t.x + Math.cos(a) * t.r * 0.45, t.y + Math.sin(a) * t.r * 0.45, t.r * 0.62, t.r * 0.62); }
+  ctx.fillStyle = p[1]; ell(t.x - 3, t.y - 3, t.r * 0.78, t.r * 0.74);
+  ctx.fillStyle = p[2] || p[1]; ell(t.x - t.r * 0.25, t.y - t.r * 0.28, t.r * 0.38, t.r * 0.32);
+  if (winter) {
+    ctx.fillStyle = 'rgba(250,252,255,0.92)';
+    for (let i = 0; i < 6; i++) { const a = (i / 6) * TAU + t.seed * 3; ell(t.x + Math.cos(a) * t.r * 0.42 - 4, t.y + Math.sin(a) * t.r * 0.42 - 4, t.r * 0.26, t.r * 0.18, a); }
+  }
+}
+function drawAcorn(x, y, rot, s = 1) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.scale(s, s);
+  ctx.fillStyle = 'rgba(0,0,0,0.25)'; ell(1, 2.5, 4.4, 3);
+  ctx.fillStyle = '#9a6430'; ell(0, 1.2, 3.8, 4.6);
+  ctx.fillStyle = '#c48a4a'; ell(-1.2, 0.5, 1.2, 2);
+  ctx.fillStyle = '#5a3a1b'; ctx.beginPath(); ctx.ellipse(0, -2, 4.6, 2.6, 0, Math.PI, TAU); ctx.fill(); ctx.fillRect(-4.6, -2, 9.2, 1.2);
+  ctx.fillRect(-0.6, -6, 1.2, 2.4);
+  ctx.restore();
+}
+function drawCache(c, winter) {
+  const ready = tick - c.born > 200;
+  ctx.fillStyle = winter ? '#8a6b52' : '#5e4128'; ell(c.x, c.y, 9, 6.5);
+  ctx.fillStyle = winter ? '#a88b70' : '#7a5636'; ell(c.x - 2, c.y - 1.5, 4.5, 3);
+  ctx.strokeStyle = ready ? '#e2c8ff' : 'rgba(226,200,255,0.4)'; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.moveTo(c.x - 3.5, c.y - 3.5); ctx.lineTo(c.x + 3.5, c.y + 3.5); ctx.moveTo(c.x + 3.5, c.y - 3.5); ctx.lineTo(c.x - 3.5, c.y + 3.5); ctx.stroke();
+}
+function drawSquirrel(t) {
+  ctx.save(); ctx.translate(sq.x, sq.y); ctx.rotate(sq.a);
+  const s = sq.inTree ? 1.3 : 1.12; ctx.scale(s, s);
+  ctx.fillStyle = sq.inTree ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.25)'; ell(3, 4, 16, 8);
+  const wag = Math.sin(t * 0.008) * 0.32 + (curAct === 5 ? 0 : Math.sin(t * 0.03) * 0.12);
+  ctx.save(); ctx.translate(-8, 0); ctx.rotate(wag);
+  ctx.fillStyle = '#b9784a'; ell(-9, 0, 11.5, 8);
+  ctx.fillStyle = '#ddb184'; ell(-12, 0, 6.5, 4);
+  ctx.restore();
+  ctx.fillStyle = '#8c5230'; ell(0, 0, 10, 6.5);
+  ctx.fillStyle = '#cf9566'; ell(1.5, 0, 5.5, 3.2);
+  ctx.fillStyle = '#8c5230'; ell(10, 0, 5.4, 5);
+  ctx.fillStyle = '#6a3c1f'; ell(8.5, -4.6, 2.4, 1.6, -0.5); ell(8.5, 4.6, 2.4, 1.6, 0.5);
+  ctx.fillStyle = '#121212'; ell(12.6, -2.1, 1.05, 1.05); ell(12.6, 2.1, 1.05, 1.05);
+  ctx.fillStyle = '#3a2214'; ell(15.3, 0, 1, 1);
+  for (let i = 0; i < sq.carry; i++) drawAcorn(16.5, (i - (sq.carry - 1) / 2) * 5, 1.57, 0.65);
+  ctx.restore();
+  // hunger ring
+  ctx.strokeStyle = sq.hunger > 0.75 ? '#ff6b57' : sq.hunger > 0.5 ? '#ffc35a' : 'rgba(255,255,255,0.75)';
+  ctx.lineWidth = 2.2; ctx.beginPath(); ctx.arc(sq.x, sq.y, 22, -Math.PI / 2, -Math.PI / 2 + TAU * (1 - sq.hunger)); ctx.stroke();
+}
+function drawFox(t) {
+  ctx.save(); ctx.translate(fox.x, fox.y); ctx.rotate(fox.a);
+  ctx.fillStyle = 'rgba(0,0,0,0.25)'; ell(3, 5, 22, 9);
+  const wag = Math.sin(t * (fox.mode === 'chase' ? 0.03 : 0.006)) * 0.35;
+  ctx.save(); ctx.translate(-14, 0); ctx.rotate(wag);
+  ctx.fillStyle = '#d0652a'; ell(-10, 0, 13, 5.5);
+  ctx.fillStyle = '#f5efe6'; ell(-20, 0, 4.5, 3.6);
+  ctx.restore();
+  ctx.fillStyle = '#d96d2c'; ell(0, 0, 15, 7.5);
+  ctx.fillStyle = '#e8854a'; ell(2, 0, 9, 4);
+  ctx.fillStyle = '#d96d2c'; ctx.beginPath(); ctx.moveTo(10, -7); ctx.lineTo(25, 0); ctx.lineTo(10, 7); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#f5efe6'; ctx.beginPath(); ctx.moveTo(15, -3.5); ctx.lineTo(25, 0); ctx.lineTo(15, 3.5); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#2a1a12'; ell(25, 0, 1.6, 1.6);
+  ctx.fillStyle = '#3a2216'; ctx.beginPath(); ctx.moveTo(10, -6); ctx.lineTo(8, -12); ctx.lineTo(14, -7); ctx.fill(); ctx.beginPath(); ctx.moveTo(10, 6); ctx.lineTo(8, 12); ctx.lineTo(14, 7); ctx.fill();
+  ctx.fillStyle = '#111'; ell(17, -3, 1.1, 1.1); ell(17, 3, 1.1, 1.1);
+  ctx.restore();
+  if (fox.mode === 'rest') { ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.font = '700 13px ' + 'Bricolage Grotesque, system-ui'; ctx.fillText('z z', fox.x + 12, fox.y - 16 - Math.sin(t * 0.004) * 3); }
+  if (fox.mode === 'chase') { ctx.strokeStyle = 'rgba(255,95,87,0.55)'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 5]); ctx.beginPath(); ctx.moveTo(fox.x, fox.y); ctx.lineTo(sq.x, sq.y); ctx.stroke(); ctx.setLineDash([]); }
+}
+const flakes = Array.from({ length: 110 }, () => ({ x: Math.random() * W, y: Math.random() * H, s: rnd(0.4, 1.2), r: rnd(1, 2.4) }));
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+let showVision = true;
+function roundRect(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+function render(t) {
+  const winter = season === 'inverno';
+  ctx.drawImage(bg[winter ? 'w' : 'a'], 0, 0, W, H);
+  for (const c of caches) drawCache(c, winter);
+  for (const n of nuts) drawAcorn(n.x, n.y, n.rot);
+  if (showVision) {
+    for (let k = 0; k < RAYS; k++) {
+      const ang = sq.a - FOV / 2 + (FOV * k) / (RAYS - 1), v = rayVis[k], len = Math.min(v.t, RAYLEN);
+      const hitSomething = v.t < RAYLEN;
+      ctx.strokeStyle = hitSomething ? RAYCOL[v.type] : 'rgba(255,255,255,0.35)';
+      ctx.globalAlpha = hitSomething ? 0.85 : 0.5; ctx.lineWidth = hitSomething ? 1.6 : 1;
+      ctx.beginPath(); ctx.moveTo(sq.x, sq.y); ctx.lineTo(sq.x + Math.cos(ang) * len, sq.y + Math.sin(ang) * len); ctx.stroke();
+      if (hitSomething) { ctx.fillStyle = RAYCOL[v.type]; ctx.beginPath(); ctx.arc(sq.x + Math.cos(ang) * len, sq.y + Math.sin(ang) * len, 2.6, 0, TAU); ctx.fill(); }
+    }
+    ctx.globalAlpha = 1;
+  }
+  const sqUnder = !sq.inTree;
+  if (sqUnder) drawSquirrel(t);
+  for (const tr of trees) drawTree(tr, winter);
+  if (!sqUnder) drawSquirrel(t);
+  drawFox(t);
+  // floating words
+  ctx.font = '700 13px Bricolage Grotesque, system-ui, sans-serif'; ctx.textAlign = 'center';
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i]; p.life -= 0.018; p.y -= 0.5;
+    if (p.life <= 0) { particles.splice(i, 1); continue; }
+    ctx.globalAlpha = Math.min(1, p.life * 1.5); ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillText(p.text, p.x + 1, p.y + 1);
+    ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+  }
+  ctx.globalAlpha = 1; ctx.textAlign = 'left';
+  if (winter && !reduceMotion) {
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    for (const f of flakes) { f.y += f.s; f.x += Math.sin((f.y + f.r * 50) * 0.02) * 0.3; if (f.y > H) { f.y = -4; f.x = Math.random() * W; } ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, TAU); ctx.fill(); }
+  }
+  // HUD
+  const total = winter ? WINTER : AUTUMN, frac = seasonT / total;
+  ctx.fillStyle = 'rgba(16,24,18,0.62)'; roundRect(12, 12, 164, 40, 9); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.font = '700 14px Bricolage Grotesque, system-ui, sans-serif';
+  ctx.fillText(winter ? 'Inverno' : 'Outono', 24, 30);
+  ctx.font = '500 11px JetBrains Mono, monospace'; ctx.fillStyle = 'rgba(255,255,255,0.75)';
+  ctx.fillText(winter ? 'sem nozes no chão' : 'nozes caindo', 82, 30);
+  ctx.fillStyle = 'rgba(255,255,255,0.2)'; roundRect(24, 38, 140, 5, 2.5); ctx.fill();
+  ctx.fillStyle = winter ? '#bfe3ff' : '#ffc35a'; roundRect(24, 38, Math.max(5, 140 * frac), 5, 2.5); ctx.fill();
+  const label = `Vida #${life} · ${fmtTime(lifeT)}`;
+  ctx.font = '600 12px JetBrains Mono, monospace';
+  const lw = ctx.measureText(label).width + 24;
+  ctx.fillStyle = 'rgba(16,24,18,0.62)'; roundRect(W - lw - 12, 12, lw, 28, 9); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.fillText(label, W - lw, 30);
+  if (!running) {
+    ctx.fillStyle = 'rgba(16,24,18,0.55)'; roundRect(W / 2 - 60, H / 2 - 20, 120, 40, 10); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = '700 16px Bricolage Grotesque, system-ui'; ctx.textAlign = 'center'; ctx.fillText('Pausado', W / 2, H / 2 + 6); ctx.textAlign = 'left';
+  }
+}
+
+// ---------- rendering: panel ----------
+const $ = id => document.getElementById(id);
+const wantsEl = $('wants');
+const wantRows = ACTIONS.map(name => {
+  const row = document.createElement('div'); row.className = 'want';
+  row.innerHTML = `<span>${name}</span><div class="bar"><i></i></div><span class="num">0%</span>`;
+  wantsEl.appendChild(row);
+  return { row, bar: row.querySelector('i'), num: row.querySelector('.num') };
+});
+const TAGS = { pensa: 'pensando', explora: 'curiosidade', comida: 'comida', guardar: 'guardando', perigo: 'perigo', salvo: 'a salvo', morte: 'fim da vida', estacao: 'estação', recorde: 'recorde' };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function sizeCanvas(c) {
+  const dpr = Math.min(2, window.devicePixelRatio || 1), w = c.clientWidth, h = c.clientHeight;
+  if (!w || !h) return null;
+  if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+  const g = c.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); return { g, w, h };
+}
+let activeTab = 'pensa';
+function updatePanel() {
+  if (activeTab === 'pensa') {
+    const hp = Math.round(sq.hunger * 100);
+    const hb = $('hungerBar'); hb.style.width = hp + '%';
+    hb.style.background = sq.hunger > 0.75 ? 'var(--danger)' : sq.hunger > 0.5 ? 'var(--accent)' : 'var(--leaf)';
+    $('hungerTxt').textContent = hp + '%';
+    $('carryTxt').textContent = sq.carry + '/3';
+    $('cacheTxt').textContent = caches.length;
+    $('chipSeason').textContent = season === 'inverno' ? 'Inverno' : 'Outono';
+    const st = $('chipState');
+    if (fox.mode === 'chase' && !sq.inTree) { st.className = 'chip danger'; st.textContent = 'fugindo da raposa'; }
+    else if (sq.inTree) { st.className = 'chip decide'; st.textContent = 'em cima da árvore'; }
+    else if (curExplore) { st.className = 'chip explore'; st.textContent = 'explorando'; }
+    else { st.className = 'chip decide'; st.textContent = 'decidindo'; }
+    for (let j = 0; j < NOUT; j++) {
+      const p = Math.round(probs[j] * 100), r = wantRows[j];
+      r.bar.style.width = p + '%'; r.num.textContent = p + '%'; r.row.classList.toggle('on', j === curAct);
+    }
+    if (feedDirty) {
+      $('feed').innerHTML = feed.map(f => {
+        const conf = f.explore ? '<span>ação aleatória</span>' : (f.conf != null ? `<span>certeza ${Math.round(f.conf * 100)}%</span>` : '');
+        return `<li class="t-${f.tag}"><div class="meta"><span class="tag">${TAGS[f.tag] || f.tag}</span><span>vida ${f.life} · ${f.sec}s</span>${conf}</div><p>${esc(f.text)}</p></li>`;
+      }).join('');
+      feedDirty = false;
+    }
+  } else if (activeTab === 'cerebro') { drawRadar(); drawNeurons(); }
+  else if (activeTab === 'prog') {
+    $('sLife').textContent = life;
+    $('sRecord').textContent = fmtTime(record);
+    const last = history.slice(-20); $('sAvg').textContent = last.length ? fmtTime(last.reduce((a, h) => a + h.len, 0) / last.length) : '0s';
+    $('sEps').textContent = Math.round(epsilon() * 100) + '%';
+    $('sAte').textContent = totals.ate.toLocaleString('pt-BR');
+    $('sBuried').textContent = totals.buried.toLocaleString('pt-BR');
+    $('sDec').textContent = decisions.toLocaleString('pt-BR');
+    $('sTrain').textContent = trainSteps.toLocaleString('pt-BR');
+    if (progDirty) { drawChart(); progDirty = false; }
+  }
+}
+function drawRadar() {
+  const s = sizeCanvas($('radar')); if (!s) return; const { g, w, h } = s;
+  g.clearRect(0, 0, w, h);
+  const cx = w / 2, cy = h - 18, R = Math.min(w / 2 - 12, h - 30);
+  g.strokeStyle = cssVar('--line'); g.lineWidth = 1;
+  for (const f of [0.33, 0.66, 1]) { g.beginPath(); g.arc(cx, cy, R * f, -Math.PI / 2 - FOV / 2, -Math.PI / 2 + FOV / 2); g.stroke(); }
+  for (let k = 0; k < RAYS; k++) {
+    const ang = -Math.PI / 2 - FOV / 2 + (FOV * k) / (RAYS - 1), v = rayVis[k], hit = v.t < RAYLEN;
+    const len = (Math.min(v.t, RAYLEN) / RAYLEN) * R;
+    g.strokeStyle = cssVar('--line'); g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(ang) * R, cy + Math.sin(ang) * R); g.stroke();
+    if (hit) {
+      g.strokeStyle = RAYCOL[v.type]; g.lineWidth = 4; g.lineCap = 'round';
+      g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(ang) * len, cy + Math.sin(ang) * len); g.stroke();
+      g.lineWidth = 1; g.fillStyle = cssVar('--ink'); g.font = '11px Atkinson Hyperlegible, system-ui'; g.textAlign = 'center';
+      g.fillText(TYPES[v.type], cx + Math.cos(ang) * (len + 12), cy + Math.sin(ang) * (len + 12) + 4);
+    }
+  }
+  g.fillStyle = cssVar('--accent'); g.beginPath(); g.arc(cx, cy, 7, 0, TAU); g.fill();
+  g.fillStyle = cssVar('--muted'); g.font = '11px JetBrains Mono, monospace'; g.textAlign = 'left'; g.fillText('Avelã', cx + 12, cy + 4);
+}
+function drawNeurons() {
+  const s = sizeCanvas($('neurons')); if (!s) return; const { g, w, h } = s;
+  g.clearRect(0, 0, w, h);
+  const sky = cssVar('--sky'), acc = cssVar('--accent'), leaf = cssVar('--leaf'), line = cssVar('--line'), ink = cssVar('--ink');
+  const rows = [
+    { vals: obs, color: sky, cols: 16, label: 'entradas' },
+    { vals: actsLive[0], color: acc, cols: 16, label: 'oculta 1' },
+    { vals: actsLive[1], color: acc, cols: 16, label: 'oculta 2' },
+  ];
+  const top = 8, labelW = 64, usableW = w - labelW - 8, rowH = (h - 70) / 3;
+  rows.forEach((r, ri) => {
+    let mx = 0.0001; for (let i = 0; i < r.vals.length; i++) mx = Math.max(mx, Math.abs(r.vals[i]));
+    const n = r.vals.length, cols = r.cols, rr = Math.ceil(n / cols), cell = Math.min(usableW / cols, (rowH - 6) / rr);
+    const y0 = top + ri * rowH;
+    g.fillStyle = cssVar('--muted'); g.font = '11px JetBrains Mono, monospace'; g.fillText(r.label, 0, y0 + 12);
+    for (let i = 0; i < n; i++) {
+      const c = i % cols, row = (i / cols) | 0, x = labelW + c * cell + cell / 2, y = y0 + row * cell + cell / 2;
+      const v = Math.min(1, Math.abs(r.vals[i]) / mx);
+      g.fillStyle = line; g.beginPath(); g.arc(x, y, cell * 0.36, 0, TAU); g.fill();
+      if (v > 0.02) { g.globalAlpha = 0.15 + v * 0.85; g.fillStyle = r.color; g.beginPath(); g.arc(x, y, cell * 0.36, 0, TAU); g.fill(); g.globalAlpha = 1; }
+    }
+  });
+  const y0 = top + 3 * rowH + 4, cellW = usableW / NOUT;
+  g.fillStyle = cssVar('--muted'); g.fillText('ações', 0, y0 + 14);
+  const short = ['frente', 'esq.', 'dir.', 'enterrar', 'comer', 'parar'];
+  for (let j = 0; j < NOUT; j++) {
+    const x = labelW + j * cellW + cellW / 2, p = probs[j];
+    g.fillStyle = line; g.beginPath(); g.arc(x, y0 + 10, 9, 0, TAU); g.fill();
+    g.globalAlpha = 0.15 + 0.85 * p; g.fillStyle = leaf; g.beginPath(); g.arc(x, y0 + 10, 9, 0, TAU); g.fill(); g.globalAlpha = 1;
+    if (j === curAct) { g.strokeStyle = ink; g.lineWidth = 2; g.beginPath(); g.arc(x, y0 + 10, 12, 0, TAU); g.stroke(); }
+    g.fillStyle = j === curAct ? ink : cssVar('--muted'); g.font = (j === curAct ? '700 ' : '') + '10.5px Atkinson Hyperlegible, system-ui'; g.textAlign = 'center';
+    g.fillText(short[j], x, y0 + 36); g.textAlign = 'left';
+  }
+}
+function drawChart() {
+  const s = sizeCanvas($('chart')); if (!s) return; const { g, w, h } = s;
+  g.clearRect(0, 0, w, h);
+  const data = history.slice(-80), padL = 44, padB = 22, padT = 10, cw = w - padL - 6, ch = h - padB - padT;
+  const muted = cssVar('--muted'), line = cssVar('--line');
+  g.font = '10.5px JetBrains Mono, monospace'; g.fillStyle = muted;
+  if (!data.length) { g.textAlign = 'center'; g.fillText('A primeira vida ainda está acontecendo...', w / 2, h / 2); g.textAlign = 'left'; return; }
+  const maxS = Math.max(10, ...data.map(d => d.len / 60));
+  const step = maxS > 240 ? 60 : maxS > 120 ? 30 : maxS > 50 ? 15 : maxS > 20 ? 5 : 2;
+  const top = Math.ceil(maxS / step) * step;
+  g.strokeStyle = line; g.lineWidth = 1; g.textAlign = 'right';
+  for (let v = 0; v <= top; v += step) {
+    const y = padT + ch - (v / top) * ch;
+    g.beginPath(); g.moveTo(padL, y); g.lineTo(w - 6, y); g.stroke();
+    g.fillText(v >= 60 ? `${Math.floor(v / 60)}m${v % 60 ? (v % 60) : ''}` : `${v}s`, padL - 6, y + 3.5);
+  }
+  g.textAlign = 'left';
+  const bw = cw / Math.max(data.length, 20);
+  data.forEach((d, i) => {
+    const bh = (d.len / 60 / top) * ch;
+    g.fillStyle = d.cause === 'raposa' ? cssVar('--danger') : cssVar('--accent');
+    g.globalAlpha = 0.8; g.fillRect(padL + i * bw + 1, padT + ch - bh, Math.max(1, bw - 2), bh); g.globalAlpha = 1;
+  });
+  g.strokeStyle = cssVar('--ink'); g.lineWidth = 2; g.beginPath();
+  data.forEach((d, i) => {
+    const win = data.slice(Math.max(0, i - 9), i + 1), avg = win.reduce((a, x) => a + x.len, 0) / win.length / 60;
+    const x = padL + i * bw + bw / 2, y = padT + ch - (avg / top) * ch;
+    i ? g.lineTo(x, y) : g.moveTo(x, y);
+  });
+  g.stroke();
+  const firstLife = life - data.length;
+  g.fillStyle = muted; g.fillText(`vida ${firstLife}`, padL, h - 6); g.textAlign = 'right'; g.fillText(`vida ${life - 1}`, w - 6, h - 6); g.textAlign = 'left';
+}
+
+// ---------- statistics board ----------
+const logbook = [], series = [];
+let statsDirty = true, logDirty = true, logFilter = 'todos';
+function logEvent(tag, text) {
+  logbook.push({ d: decisions, life, sec: Math.round(lifeT / 60), tag, text });
+  if (logbook.length > 1500) logbook.shift();
+  logDirty = true;
+}
+const ACT_COLORS = ['--leaf', '--sky', '--teal', '--violet', '--accent', '--gold'];
+$('actLegend').innerHTML = ACTIONS.map((a, i) => `<span><i style="background:var(${ACT_COLORS[i]})"></i>${a}</span>`).join('');
+const charts = {};
+document.querySelectorAll('[data-chart]').forEach(card => {
+  const o = { c: card.querySelector('canvas'), tip: card.querySelector('.tip'), meta: null };
+  charts[card.dataset.chart] = o;
+  o.c.addEventListener('mousemove', e => {
+    const m = o.meta; if (!m) { o.tip.hidden = true; return; }
+    const r = o.c.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+    const i = m.rowAt ? m.rowAt(y) : Math.floor((x - m.padL) / m.bw);
+    if (i < 0 || i >= m.n) { o.tip.hidden = true; return; }
+    o.tip.innerHTML = m.tip(i); o.tip.hidden = false;
+    o.tip.style.left = clamp(x, 80, r.width - 80) + 'px'; o.tip.style.top = y + 'px';
+  });
+  o.c.addEventListener('mouseleave', () => { o.tip.hidden = true; });
+});
+const lifeNum = (h, i) => h.n || (life - (history.length - i));
+const num = v => v || 0;
+function niceStep(v) { if (!(v > 0)) return 1; const p = Math.pow(10, Math.floor(Math.log10(v))), n = v / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * p; }
+function movingAvg(arr, win) { const out = []; let s = 0; for (let i = 0; i < arr.length; i++) { s += arr[i]; if (i >= win) s -= arr[i - win]; out.push(s / Math.min(i + 1, win)); } return out; }
+const fmtSec = v => v >= 60 ? `${Math.floor(v / 60)}m${Math.round(v % 60) ? Math.round(v % 60) : ''}` : `${Math.round(v)}s`;
+function plot(k, n, yMin, yMax, fmtY, xLeft, xRight) {
+  const o = charts[k], s = sizeCanvas(o.c); if (!s) return null;
+  const { g, w, h } = s; g.clearRect(0, 0, w, h);
+  const padL = 48, padR = 12, padT = 10, padB = 22, cw = w - padL - padR, ch = h - padT - padB;
+  const muted = cssVar('--muted'), line = cssVar('--line');
+  g.font = '10.5px JetBrains Mono, monospace'; g.lineWidth = 1;
+  if (n === 0) { o.meta = null; g.fillStyle = muted; g.textAlign = 'center'; g.fillText('Esperando dados. Deixe a simulação rodar um pouco.', w / 2, h / 2); g.textAlign = 'left'; return null; }
+  const step = niceStep((yMax - yMin) / 4), lo = Math.floor(yMin / step) * step, hi = Math.max(lo + step, Math.ceil(yMax / step) * step);
+  g.textAlign = 'right';
+  for (let v = lo; v <= hi + step * 0.001; v += step) {
+    const y = padT + ch - ((v - lo) / (hi - lo)) * ch;
+    g.strokeStyle = (Math.abs(v) < 1e-9 && lo < 0) ? muted : line;
+    g.beginPath(); g.moveTo(padL, y); g.lineTo(w - padR, y); g.stroke();
+    g.fillStyle = muted; g.fillText(fmtY(Math.round(v * 1000) / 1000), padL - 6, y + 3.5);
+  }
+  g.fillText(xRight, w - padR, h - 6); g.textAlign = 'left'; g.fillText(xLeft, padL, h - 6);
+  const bw = cw / n;
+  return { g, w, h, padL, padT, cw, ch, bw, n, o, X: i => padL + i * bw + bw / 2, Y: v => padT + ch - ((v - lo) / (hi - lo)) * ch };
+}
+function strokeLine(P, vals, color, width = 2, dash) {
+  const g = P.g; g.strokeStyle = color; g.lineWidth = width; g.setLineDash(dash || []); g.beginPath();
+  vals.forEach((v, i) => { const x = P.X(i), y = P.Y(v); i ? g.lineTo(x, y) : g.moveTo(x, y); });
+  g.stroke(); g.setLineDash([]);
+  if (vals.length) { g.fillStyle = color; g.beginPath(); g.arc(P.X(vals.length - 1), P.Y(vals[vals.length - 1]), 3.2, 0, TAU); g.fill(); }
+}
+function groups() {
+  const size = Math.max(5, Math.ceil(history.length / 30)), out = [];
+  for (let i = 0; i < history.length; i += size) out.push({ from: lifeNum(history[i], i), to: lifeNum(history[Math.min(history.length, i + size) - 1], Math.min(history.length, i + size) - 1), items: history.slice(i, i + size) });
+  return out;
+}
+const rangeLabels = (n, first, last) => [n ? `vida ${first}` : '', n ? `vida ${last}` : ''];
+function chartVidas() {
+  const hs = history, n = hs.length, secs = hs.map(h => h.len / 60);
+  const [a, b] = rangeLabels(n, n && lifeNum(hs[0], 0), n && lifeNum(hs[n - 1], n - 1));
+  const P = plot('vidas', n, 0, Math.max(10, ...secs), fmtSec, a, b); if (!P) return;
+  const danger = cssVar('--danger'), acc = cssVar('--accent'), gap = P.bw > 3 ? 1 : 0;
+  P.g.globalAlpha = 0.75;
+  hs.forEach((h, i) => { const y = P.Y(secs[i]); P.g.fillStyle = h.cause === 'raposa' ? danger : acc; P.g.fillRect(P.padL + i * P.bw + gap / 2, y, Math.max(1, P.bw - gap), P.Y(0) - y); });
+  P.g.globalAlpha = 1;
+  strokeLine(P, movingAvg(secs, 10), cssVar('--ink'));
+  P.o.meta = { padL: P.padL, bw: P.bw, n, tip: i => { const h = hs[i]; return `<b>Vida ${lifeNum(h, i)}</b><br>${fmtTime(h.len)} · ${h.cause === 'raposa' ? 'pego pela raposa' : 'morreu de fome'}<br>comeu ${num(h.ate)} · enterrou ${num(h.buried)} · fugiu ${num(h.escapes)}x`; } };
+}
+function chartMortes() {
+  const G = groups(), n = G.length;
+  const [a, b] = rangeLabels(n, n && G[0].from, n && G[n - 1].to);
+  const P = plot('mortes', n, 0, 100, v => v + '%', a, b); if (!P) return;
+  const danger = cssVar('--danger'), acc = cssVar('--accent'), shares = G.map(gr => gr.items.filter(h => h.cause === 'raposa').length / gr.items.length * 100);
+  G.forEach((gr, i) => {
+    const x = P.padL + i * P.bw + 1, wd = Math.max(1, P.bw - 2), f = shares[i];
+    P.g.fillStyle = danger; P.g.fillRect(x, P.Y(f), wd, P.Y(0) - P.Y(f));
+    P.g.fillStyle = acc; P.g.globalAlpha = 0.85; P.g.fillRect(x, P.Y(100), wd, P.Y(f) - P.Y(100)); P.g.globalAlpha = 1;
+  });
+  P.o.meta = { padL: P.padL, bw: P.bw, n, tip: i => `<b>Vidas ${G[i].from} a ${G[i].to}</b><br>raposa ${Math.round(shares[i])}% · fome ${100 - Math.round(shares[i])}%` };
+}
+function chartComida() {
+  const hs = history, n = hs.length;
+  const picked = movingAvg(hs.map(h => num(h.picked)), 10), ate = movingAvg(hs.map(h => num(h.ate)), 10), bur = movingAvg(hs.map(h => num(h.buried)), 10);
+  const [a, b] = rangeLabels(n, n && lifeNum(hs[0], 0), n && lifeNum(hs[n - 1], n - 1));
+  const P = plot('comida', n, 0, Math.max(2, ...picked, ...ate, ...bur), v => String(v), a, b); if (!P) return;
+  strokeLine(P, picked, cssVar('--sky')); strokeLine(P, bur, cssVar('--violet')); strokeLine(P, ate, cssVar('--leaf'), 2.4);
+  P.o.meta = { padL: P.padL, bw: P.bw, n, tip: i => `<b>Vida ${lifeNum(hs[i], i)}</b><br>pegou ${num(hs[i].picked)} · comeu ${num(hs[i].ate)} · enterrou ${num(hs[i].buried)}<br>média: comeu ${ate[i].toFixed(1)} por vida` };
+}
+function chartPontos() {
+  const hs = history, n = hs.length, avg = movingAvg(hs.map(h => num(h.reward)), 10);
+  const [a, b] = rangeLabels(n, n && lifeNum(hs[0], 0), n && lifeNum(hs[n - 1], n - 1));
+  const P = plot('pontos', n, Math.min(0, ...avg), Math.max(0.5, ...avg), v => String(v), a, b); if (!P) return;
+  strokeLine(P, avg, cssVar('--accent'), 2.4);
+  P.o.meta = { padL: P.padL, bw: P.bw, n, tip: i => `<b>Vida ${lifeNum(hs[i], i)}</b><br>pontos nesta vida: ${num(hs[i].reward).toFixed(2)}<br>média de 10: ${avg[i].toFixed(2)}` };
+}
+function chartFugas() {
+  const G = groups().filter(gr => gr.items.some(h => num(h.chases) > 0)), n = G.length;
+  const rate = G.map(gr => { const c = gr.items.reduce((s, h) => s + num(h.chases), 0), e = gr.items.reduce((s, h) => s + num(h.escapes), 0); return c ? Math.min(100, e / c * 100) : 0; });
+  const [a, b] = rangeLabels(n, n && G[0].from, n && G[n - 1].to);
+  const P = plot('fugas', n, 0, 100, v => v + '%', a, b); if (!P) return;
+  strokeLine(P, rate, cssVar('--leaf'), 2.4);
+  P.g.fillStyle = cssVar('--leaf'); rate.forEach((v, i) => { P.g.beginPath(); P.g.arc(P.X(i), P.Y(v), 2.4, 0, TAU); P.g.fill(); });
+  P.o.meta = { padL: P.padL, bw: P.bw, n, tip: i => { const c = G[i].items.reduce((s, h) => s + num(h.chases), 0), e = G[i].items.reduce((s, h) => s + num(h.escapes), 0); return `<b>Vidas ${G[i].from} a ${G[i].to}</b><br>escapou de ${e} de ${c} perseguições (${Math.round(rate[i])}%)`; } };
+}
+function chartTreino() {
+  const n = series.length, maxLoss = Math.max(1e-6, ...series.map(s => s.loss));
+  const P = plot('treino', n, 0, 100, v => v + '%', n ? `decisão ${series[0].d.toLocaleString('pt-BR')}` : '', n ? `decisão ${series[n - 1].d.toLocaleString('pt-BR')}` : ''); if (!P) return;
+  strokeLine(P, series.map(s => s.eps * 100), cssVar('--sky'), 2.4);
+  strokeLine(P, series.map(s => s.loss / maxLoss * 100), cssVar('--ink'), 1.6, [5, 4]);
+  P.o.meta = { padL: P.padL, bw: P.bw, n, tip: i => `<b>Decisão ${series[i].d.toLocaleString('pt-BR')}</b><br>curiosidade ${Math.round(series[i].eps * 100)}%<br>erro ${series[i].loss.toFixed(4)} · média de vida ${fmtSec(series[i].avg)}` };
+}
+function chartAcoes() {
+  const o = charts.acoes, s = sizeCanvas(o.c); if (!s) return;
+  const { g, w, h } = s; g.clearRect(0, 0, w, h);
+  const withActs = history.filter(x => Array.isArray(x.acts));
+  g.font = '10.5px JetBrains Mono, monospace';
+  if (withActs.length < 2) { o.meta = null; g.fillStyle = cssVar('--muted'); g.textAlign = 'center'; g.fillText('Esperando algumas vidas terminarem.', w / 2, h / 2); g.textAlign = 'left'; return; }
+  const k = Math.min(20, Math.floor(withActs.length / 2)) || 1;
+  const sets = [{ label: 'antes', items: withActs.slice(0, k) }, { label: 'agora', items: withActs.slice(-k) }];
+  const shares = sets.map(st => { const t = [0, 0, 0, 0, 0, 0]; st.items.forEach(x => x.acts.forEach((v, j) => t[j] += v)); const sum = t.reduce((a, b) => a + b, 0) || 1; return t.map(v => v / sum); });
+  const padL = 52, barH = Math.min(38, (h - 40) / 2), gapY = 18, top = (h - (barH * 2 + gapY)) / 2;
+  const cols = ACT_COLORS.map(cssVar);
+  shares.forEach((sh, r) => {
+    const y = top + r * (barH + gapY); let x = padL;
+    g.fillStyle = cssVar('--muted'); g.fillText(sets[r].label, 0, y + barH / 2 + 4);
+    sh.forEach((v, j) => {
+      const wd = v * (w - padL - 4); g.fillStyle = cols[j]; g.fillRect(x, y, Math.max(0, wd - 1), barH);
+      if (wd > 34) { g.fillStyle = cssVar('--surface'); g.font = '600 11px JetBrains Mono, monospace'; g.fillText(Math.round(v * 100) + '%', x + 5, y + barH / 2 + 4); g.font = '10.5px JetBrains Mono, monospace'; }
+      x += wd;
+    });
+  });
+  o.meta = { n: 2, rowAt: y => y >= top && y <= top + barH ? 0 : (y >= top + barH + gapY && y <= top + 2 * barH + gapY ? 1 : -1),
+    tip: r => `<b>${r === 0 ? `Primeiras ${k} vidas` : `Últimas ${k} vidas`}</b><br>` + ACTIONS.map((a, j) => `${a}: ${Math.round(shares[r][j] * 100)}%`).join('<br>') };
+}
+function updateTiles() {
+  const avg = a => a.length ? a.reduce((s, h) => s + h.len, 0) / a.length : 0;
+  const last20 = history.slice(-20), prev20 = history.slice(-40, -20), last50 = history.slice(-50);
+  $('tLives').textContent = (life - 1).toLocaleString('pt-BR');
+  $('tLivesSub').textContent = `vida #${life} acontecendo agora`;
+  $('tRecord').textContent = fmtTime(record);
+  const best = history.reduce((m, h, i) => (h.len >= record && record > 0 ? lifeNum(h, i) : m), null);
+  $('tRecordSub').textContent = best ? `na vida #${best}` : ' ';
+  $('tAvg').textContent = fmtTime(avg(last20));
+  const tr = $('tAvgTrend');
+  if (prev20.length) { const d = Math.round((avg(last20) - avg(prev20)) / 60); tr.textContent = d >= 0 ? `▲ ${d}s vs. 20 anteriores` : `▼ ${-d}s vs. 20 anteriores`; tr.className = d >= 0 ? 'up' : 'down'; }
+  else { tr.textContent = 'precisa de 40 vidas para comparar'; tr.className = ''; }
+  $('tFood').textContent = last20.length ? (last20.reduce((s, h) => s + num(h.ate), 0) / last20.length).toFixed(1) : '0';
+  const c = last50.reduce((s, h) => s + num(h.chases), 0), e = last50.reduce((s, h) => s + num(h.escapes), 0);
+  $('tEscape').textContent = c ? Math.round(Math.min(1, e / c) * 100) + '%' : '–';
+  $('tEscapeSub').textContent = c ? `${e} de ${c} perseguições` : 'nenhuma perseguição ainda';
+  const fox = last50.filter(h => h.cause === 'raposa').length, hun = last50.length - fox;
+  $('tCause').textContent = !last50.length ? 'nenhuma' : fox >= hun ? 'raposa' : 'fome';
+  $('tCauseSub').textContent = last50.length ? `raposa ${fox} · fome ${hun}` : 'ainda ninguém morreu';
+}
+function renderLog() {
+  const rows = logFilter === 'todos' ? logbook : logbook.filter(e => e.tag === logFilter);
+  const show = rows.slice(-200).reverse();
+  $('logBody').innerHTML = show.length
+    ? show.map(e => `<tr><td class="num">${e.d.toLocaleString('pt-BR')}</td><td class="num">${e.life}</td><td class="num">${e.sec}s</td><td class="t-${e.tag}"><span class="tag">${TAGS[e.tag] || e.tag}</span></td><td>${esc(e.text)}</td></tr>`).join('')
+    : '<tr><td colspan="5" class="empty">Nenhum evento desse tipo ainda.</td></tr>';
+  $('logCount').textContent = `${rows.length.toLocaleString('pt-BR')} eventos${rows.length > 200 ? ' (mostrando os 200 mais recentes)' : ''}`;
+  logDirty = false;
+}
+function updateStats() {
+  updateTiles();
+  if (statsDirty) { chartVidas(); chartMortes(); chartComida(); chartPontos(); chartFugas(); chartTreino(); chartAcoes(); statsDirty = false; }
+  if (logDirty) renderLog();
+}
+document.querySelectorAll('#logFilters button').forEach(b => b.addEventListener('click', () => {
+  logFilter = b.dataset.filter;
+  document.querySelectorAll('#logFilters button').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
+  renderLog();
+}));
+const csvCell = v => { const s = String(v ?? ''); return /[",;\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+function livesCSV() {
+  const head = ['vida', 'duracao_s', 'causa', 'nozes_pegas', 'comidas', 'enterradas', 'desenterradas', 'perseguicoes', 'fugas', 'pontuacao', 'curiosidade', 'fome_media', 'tempo_na_arvore', 'estacao_da_morte', ...ACTIONS.map(a => 'acao_' + a.toLowerCase().replace(/[^a-z]+/g, '_'))];
+  const rows = history.map((h, i) => [lifeNum(h, i), Math.round(h.len / 60), h.cause, num(h.picked), num(h.ate), num(h.buried), num(h.dug), num(h.chases), num(h.escapes), num(h.reward), num(h.explore), num(h.hunger), num(h.tree), h.season || '', ...(h.acts || [0, 0, 0, 0, 0, 0])]);
+  return [head, ...rows].map(r => r.map(csvCell).join(',')).join('\n');
+}
+function logCSV() { return [['decisao', 'vida', 'tempo_s', 'tipo', 'evento'], ...logbook.map(e => [e.d, e.life, e.sec, TAGS[e.tag] || e.tag, e.text])].map(r => r.map(csvCell).join(',')).join('\n'); }
+function copyText(text, what) {
+  const msg = $('copyMsg'), box = $('copyBox');
+  const fallback = () => { box.hidden = false; box.value = text; box.focus(); box.select(); msg.textContent = `Não consegui copiar sozinho. Selecionei ${what} abaixo: use Ctrl+C.`; };
+  try {
+    navigator.clipboard.writeText(text).then(() => { box.hidden = true; msg.textContent = `${what[0].toUpperCase() + what.slice(1)} copiado. Cole numa planilha (Excel, Google Sheets).`; }, fallback);
+  } catch (e) { fallback(); }
+}
+$('copyLives').addEventListener('click', () => copyText(livesCSV(), 'o histórico de vidas'));
+$('copyLog').addEventListener('click', () => copyText(logCSV(), 'o diário'));
+
+// ---------- controls ----------
+$('play').addEventListener('click', () => { running = !running; $('play').textContent = running ? 'Pausar' : 'Continuar'; });
+document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
+  speed = +b.dataset.speed;
+  document.querySelectorAll('.seg button').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
+}));
+$('vision').addEventListener('change', e => { showVision = e.target.checked; });
+let resetTimer = 0;
+$('reset').addEventListener('click', () => {
+  const btn = $('reset');
+  if (!btn.classList.contains('armed')) {
+    btn.classList.add('armed'); btn.textContent = 'Apagar tudo que aprendeu?';
+    clearTimeout(resetTimer); resetTimer = setTimeout(() => { btn.classList.remove('armed'); btn.textContent = 'Cérebro novo'; }, 3500);
+    return;
+  }
+  clearTimeout(resetTimer); btn.classList.remove('armed'); btn.textContent = 'Cérebro novo';
+  initBrain(null); RB.n = 0; RB.i = 0; decisions = 0; trainSteps = 0; lossAvg = 0;
+  history = []; record = 0; totals = { ate: 0, buried: 0 }; life = 1; lifeT = 0; caches = []; feed.length = 0;
+  series.length = 0; logbook.length = 0; statsDirty = true; logDirty = true;
+  sq = newSquirrel(); resetFox(); haveObs = false; phase = 0; progDirty = true;
+  try { localStorage.removeItem(KEY); } catch (e) {}
+  lastBigAt = 0; think('Cérebro novo em folha. Não sei nada ainda!', 'pensa', 2);
+});
+cv.addEventListener('click', e => {
+  const r = cv.getBoundingClientRect();
+  const x = ((e.clientX - r.left) / r.width) * W, y = ((e.clientY - r.top) / r.height) * H;
+  spawnNut(clamp(x, 12, W - 12), clamp(y, 12, H - 12));
+});
+const tabs = { pensa: $('tab-pensa'), cerebro: $('tab-cerebro'), prog: $('tab-prog') };
+const panes = { pensa: $('pane-pensa'), cerebro: $('pane-cerebro'), prog: $('pane-prog') };
+Object.keys(tabs).forEach(k => tabs[k].addEventListener('click', () => {
+  activeTab = k;
+  Object.keys(tabs).forEach(j => { tabs[j].setAttribute('aria-selected', j === k ? 'true' : 'false'); panes[j].hidden = j !== k; });
+  feedDirty = true; progDirty = true; updatePanel();
+}));
+window.addEventListener('resize', () => { progDirty = true; statsDirty = true; });
+window.addEventListener('pagehide', save);
+document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
+
+// ---------- boot ----------
+sizeWorld();
+bg.a = makeBg(false); bg.w = makeBg(true);
+trees = genTrees();
+const saved = load();
+initBrain(saved);
+if (saved) {
+  decisions = saved.decisions || 0; trainSteps = saved.trainSteps || 0; history = saved.history || [];
+  record = saved.record || 0; totals = saved.totals || totals; life = saved.life || 1;
+  if (Array.isArray(saved.series)) series.push(...saved.series);
+  if (Array.isArray(saved.log)) logbook.push(...saved.log);
+}
+resetFox(); sq = newSquirrel(); resetFox();
+for (let i = 0; i < 12; i++) spawnNut();
+observe(obs); haveObs = true; softmax(forward(online, obs, actsLive));
+think(saved ? `Acordei! Lembro do que aprendi em ${decisions.toLocaleString('pt-BR')} decisões.` : 'Acabei de nascer. Não sei nada sobre essa floresta ainda!', 'pensa', 2);
+
+let acc = 0, lastPanel = 0, lastStats = -5000, lastSave = performance.now();
+function frame(t) {
+  if (running) {
+    if (speed === 0) { const start = performance.now(); while (performance.now() - start < 13) for (let i = 0; i < 20; i++) simTick(); }
+    else { acc += speed; while (acc >= 1) { simTick(); acc--; } }
+  }
+  render(t);
+  if (t - lastPanel > 110) { updatePanel(); lastPanel = t; }
+  if (t - lastStats > 1000) { updateStats(); lastStats = t; }
+  if (t - lastSave > 20000) { save(); lastSave = t; }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
